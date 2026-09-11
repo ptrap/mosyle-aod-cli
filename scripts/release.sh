@@ -16,7 +16,7 @@ cd "$(dirname "$0")/.."
 release_version=${version#v}
 stage="dist/stage-$release_version"
 mkdir -p "$stage" dist/Formula
-CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -buildvcs=false \
+CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -trimpath -buildvcs=false \
   -ldflags "-s -w -X main.version=$release_version" \
   -o "$stage/mosyle-aod" ./cmd/mosyle-aod
 cp README.md LICENSE "$stage/"

@@ -8,6 +8,7 @@ import (
 
 	"github.com/ptrap/mosyle-aod-cli/internal/aod"
 	"github.com/ptrap/mosyle-aod-cli/internal/cli"
+	"github.com/ptrap/mosyle-aod-cli/internal/localauth"
 )
 
 var version = "dev"
@@ -15,6 +16,7 @@ var version = "dev"
 type backend struct{ s aod.System }
 
 func (b backend) Admin(ctx context.Context) (bool, error) { return b.s.Admin(ctx) }
+func (b backend) Confirm(ctx context.Context) error       { return localauth.Confirm(ctx) }
 func (b backend) Request(ctx context.Context, reason string) (int, error) {
 	device, build, err := b.s.Device(ctx)
 	if err != nil {

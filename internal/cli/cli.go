@@ -11,10 +11,12 @@ import (
 	"time"
 
 	"github.com/ptrap/mosyle-aod-cli/internal/aod"
+	"github.com/ptrap/mosyle-aod-cli/internal/localauth"
 )
 
 type Backend interface {
 	Admin(context.Context) (bool, error)
+	Confirm(context.Context) error
 	Request(context.Context, string) (int, error)
 }
 type Factory func(context.Context) (Backend, error)
@@ -37,6 +39,7 @@ Usage:
   mosyle-aod version
 
 request returns after acceptance unless --wait is given. wait never submits a request.
+request requires macOS authentication (Touch ID or the user's password).
 status exits 0 for admin, 1 for standard user. Expiry is not inferred from membership.
 `
 
@@ -134,6 +137,15 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 		return finish(1, nil)
 	}
 	if command == "request" {
+		if !*jsonMode {
+			fmt.Fprintln(errOut, "Confirm with Touch ID or your Mac password in the macOS dialog...")
+		}
+		if e := backend.Confirm(ctx); e != nil {
+			return finish(errorCode(e), e)
+		}
+		if e := ctx.Err(); e != nil {
+			return finish(errorCode(e), e)
+		}
 		minutes, e := backend.Request(ctx, reason)
 		if errors.Is(e, aod.ErrAlreadyActive) {
 			result.State = "active"
@@ -163,6 +175,8 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, version stri
 }
 func errorKind(e error) string {
 	switch {
+	case errors.Is(e, localauth.ErrFailed), errors.Is(e, localauth.ErrCanceled), errors.Is(e, localauth.ErrUnavailable), errors.Is(e, localauth.ErrTimeout):
+		return "authentication"
 	case errors.Is(e, aod.ErrSession):
 		return "session"
 	case errors.Is(e, aod.ErrDenied):
@@ -185,6 +199,8 @@ func errorKind(e error) string {
 }
 func errorCode(e error) int {
 	switch errorKind(e) {
+	case "authentication":
+		return 9
 	case "session":
 		return 3
 	case "denied":

@@ -8,6 +8,8 @@ permissions:
 jobs:
   test:
     runs-on: macos-15
+    env:
+      CGO_ENABLED: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -16,6 +18,7 @@ jobs:
           cache: true
       - run: test -z "$(gofmt -l cmd internal)"
       - run: go test -race ./...
+      - run: CGO_ENABLED=0 go test ./...
       - run: go vet ./...
       - run: go test ./internal/aod -run '^$' -fuzz FuzzCookies -fuzztime 10s
       - run: go build -o dist/mosyle-aod ./cmd/mosyle-aod

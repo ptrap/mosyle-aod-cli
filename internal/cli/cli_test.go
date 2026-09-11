@@ -6,13 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/ptrap/mosyle-aod-cli/internal/aod"
+	"github.com/ptrap/mosyle-aod-cli/internal/localauth"
 	"testing"
 )
 
 type fake struct {
-	states     []bool
-	requests   int
-	requestErr error
+	states        []bool
+	requests      int
+	requestErr    error
+	confirmErr    error
+	confirmations int
+	afterConfirm  func()
 }
 
 func (f *fake) Admin(context.Context) (bool, error) {
@@ -21,6 +25,13 @@ func (f *fake) Admin(context.Context) (bool, error) {
 		f.states = f.states[1:]
 	}
 	return v, nil
+}
+func (f *fake) Confirm(context.Context) error {
+	f.confirmations++
+	if f.afterConfirm != nil {
+		f.afterConfirm()
+	}
+	return f.confirmErr
 }
 func (f *fake) Request(context.Context, string) (int, error) { f.requests++; return 10, f.requestErr }
 func TestCommands(t *testing.T) {
@@ -53,6 +64,9 @@ func TestCommands(t *testing.T) {
 			if code != tt.code || f.requests != tt.requests || result.State != tt.state {
 				t.Fatalf("code=%d requests=%d result=%+v", code, f.requests, result)
 			}
+			if f.confirmations != tt.requests {
+				t.Fatalf("confirmations=%d requests=%d", f.confirmations, tt.requests)
+			}
 			if result.ExpiresAt != nil {
 				t.Fatal("must not invent expiry")
 			}
@@ -79,6 +93,39 @@ func TestHelpDoesNotNeedMac(t *testing.T) {
 		var out bytes.Buffer
 		if Run(context.Background(), args, &out, &out, "test", func(context.Context) (Backend, error) { t.Fatal("backend called"); return nil, nil }) != 0 {
 			t.Fatal(out.String())
+		}
+	}
+}
+
+func TestAuthenticationFailureNeverSubmits(t *testing.T) {
+	for _, err := range []error{localauth.ErrFailed, localauth.ErrCanceled, localauth.ErrUnavailable, localauth.ErrTimeout} {
+		t.Run(err.Error(), func(t *testing.T) {
+			f := &fake{states: []bool{false}, confirmErr: err}
+			var out, stderr bytes.Buffer
+			code := Run(context.Background(), []string{"request", "--reason", "test", "--wait", "--json"}, &out, &stderr, "test", func(context.Context) (Backend, error) { return f, nil })
+			var result Result
+			if e := json.Unmarshal(out.Bytes(), &result); e != nil {
+				t.Fatal(e)
+			}
+			if code != 9 || f.requests != 0 || f.confirmations != 1 || result.Accepted || result.Error != "authentication" {
+				t.Fatalf("code=%d requests=%d confirmations=%d result=%+v", code, f.requests, f.confirmations, result)
+			}
+		})
+	}
+}
+
+func TestCancellationAtConfirmationNeverSubmits(t *testing.T) {
+	for _, during := range []bool{true, false} {
+		ctx, cancel := context.WithCancel(context.Background())
+		f := &fake{states: []bool{false}, afterConfirm: cancel}
+		if during {
+			f.confirmErr = context.Canceled
+		}
+		var out bytes.Buffer
+		code := Run(ctx, []string{"request", "--reason", "test", "--json"}, &out, &out, "test", func(context.Context) (Backend, error) { return f, nil })
+		cancel()
+		if code != 130 || f.requests != 0 {
+			t.Fatalf("code=%d requests=%d", code, f.requests)
 		}
 	}
 }

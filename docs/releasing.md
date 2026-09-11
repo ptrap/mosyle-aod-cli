@@ -14,3 +14,31 @@
    ```
 
 For a fresh installation, use `brew install ptrap/tap/mosyle-aod` instead of `brew upgrade`. The formula test checks the version without requesting admin rights.
+
+## Native authentication validation
+
+Build on macOS with Apple Command Line Tools or Xcode and `CGO_ENABLED=1`.
+The release script links Foundation and LocalAuthentication into the CLI; no
+separate helper or language runtime is shipped.
+
+Test the real authentication dialog without reading Mosyle cookies or requesting
+administrator rights (ordinary test runs skip this interactive test):
+
+```sh
+MOSYLE_TEST_LOCAL_AUTH=success go test ./internal/localauth -run '^TestInteractiveConfirmation$' -count=1 -v
+MOSYLE_TEST_LOCAL_AUTH=cancel go test ./internal/localauth -run '^TestInteractiveConfirmation$' -count=1 -v
+```
+
+Authenticate in the first test and click Cancel in the second. Run the success
+test again and select password authentication to verify the fallback separately.
+
+Before publishing, manually validate the native dialog on a managed test Mac:
+
+- Successful Touch ID and Mac login-password fallback each permit one request.
+- Canceling the dialog or pressing Ctrl-C prevents submission and closes the prompt.
+- A Mac without enrolled Touch ID offers password authentication.
+- Leaving the prompt open for two minutes stops the request.
+- `status`, `wait`, and an already-admin `request` do not prompt.
+
+Successful confirmation in a real `request` can grant temporary administrator
+rights. Unit tests use fake authentication and never submit live requests.
