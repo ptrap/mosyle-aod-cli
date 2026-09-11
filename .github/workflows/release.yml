@@ -1,0 +1,29 @@
+name: Draft release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test -race ./...
+      - run: go vet ./...
+      - name: Build Apple Silicon release and Homebrew formula
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: scripts/release.sh "$RELEASE_TAG" "$RELEASE_REPOSITORY"
+      - name: Create draft for review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: >-
+          gh release create "$RELEASE_TAG" --draft --generate-notes
+          dist/mosyle-aod_*_darwin_arm64.tar.gz dist/checksums.txt dist/Formula/mosyle-aod.rb

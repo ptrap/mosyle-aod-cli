@@ -1,0 +1,23 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: test -z "$(gofmt -l cmd internal)"
+      - run: go test -race ./...
+      - run: go vet ./...
+      - run: go test ./internal/aod -run '^$' -fuzz FuzzCookies -fuzztime 10s
+      - run: go build -o dist/mosyle-aod ./cmd/mosyle-aod
+      - run: dist/mosyle-aod version
+      - run: dist/mosyle-aod --help
