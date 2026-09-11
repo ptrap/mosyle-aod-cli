@@ -6,13 +6,13 @@ An unofficial command-line client for Mosyle Admin On Demand on **Apple Silicon 
 
 ## Install
 
-The Homebrew installation command will be available once the first release is published and its formula is added to `ptrap/homebrew-tap`:
+Install the experimental Apple Silicon release through [ptrap/homebrew-tap](https://github.com/ptrap/homebrew-tap):
 
 ```sh
 brew install ptrap/tap/mosyle-aod
 ```
 
-The formula installs a prebuilt Apple Silicon binary; users do not need a separate language runtime. Intel Macs are not supported. Until publication, build from source:
+The formula installs a prebuilt Apple Silicon binary; users do not need a separate language runtime. Intel Macs are not supported. Alternatively, build from source:
 
 ```sh
 go build -o mosyle-aod ./cmd/mosyle-aod
