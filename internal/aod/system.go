@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -28,8 +29,12 @@ func LocalSystem(ctx context.Context) (System, error) {
 		return System{}, ErrUser
 	}
 	s := System{User: u.Username, Home: u.HomeDir}
-	console, err := command(ctx, "/usr/bin/stat", "-f", "%u", "/dev/console")
-	if err != nil || strings.TrimSpace(string(console)) != u.Uid {
+	console, err := os.Stat("/dev/console")
+	if err != nil {
+		return System{}, errors.New("could not inspect the desktop session")
+	}
+	stat, ok := console.Sys().(*syscall.Stat_t)
+	if !ok || strconv.FormatUint(uint64(stat.Uid), 10) != u.Uid {
 		return System{}, ErrUser
 	}
 	return s, nil
