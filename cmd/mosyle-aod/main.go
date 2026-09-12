@@ -22,11 +22,7 @@ func (b backend) Request(ctx context.Context, reason string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	client, err := b.s.Client()
-	if err != nil {
-		return 0, err
-	}
-	profile, err := client.Prepare(ctx, device, build)
+	client, profile, err := b.s.PrepareRequest(ctx, device, build)
 	if err != nil {
 		return 0, err
 	}
