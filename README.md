@@ -1,8 +1,8 @@
 # mosyle-aod
 
-An unofficial command-line client for Mosyle Admin On Demand on **Apple Silicon Macs**. Request temporary administrator privileges using your existing Mosyle Self-Service session, with an optional wait for activation.
+An unofficial command-line client for Mosyle Admin On Demand on **Apple Silicon Macs**. Request temporary administrator privileges using device-based Mosyle authentication, with an optional wait for activation and a saved Self-Service session fallback.
 
-**Experimental:** the web integration is undocumented. A single Go-only HTTP request was accepted and local elevation was confirmed, without a GUI action or deeplink. Mosyle controls automatic revocation. A user without Mosyle management-portal access still needs independent validation. This project is not affiliated with or endorsed by Mosyle.
+**Experimental:** the integration is undocumented. A fresh native session was used to request elevation on an enrolled Mac; local admin rights activated after about 13 seconds. The app was already running during that test, so activation with Self-Service closed remains unverified. Mosyle controls automatic revocation. This project is not affiliated with or endorsed by Mosyle.
 
 ## Install
 
@@ -21,7 +21,7 @@ go build -o mosyle-aod ./cmd/mosyle-aod
 
 ## Usage
 
-Run as your logged-in desktop user, **without sudo**. Mosyle Self-Service must already be installed and signed in; your organization's policy must permit user requests.
+Run as your logged-in desktop user, **without sudo**. Mosyle Self-Service must be installed and configured for your enrolled Mac; your organization's policy must permit user requests. On the supported device-authentication flow, no Self-Service launch or email/password login is needed to acquire a session. Other configurations require a valid saved Self-Service session.
 
 ```sh
 # Local status only. No network request or session access.
@@ -76,13 +76,17 @@ All three subcommands accept `--json`, producing one final JSON object on stdout
 
 ## Session handling and compatibility
 
-The client reads only Mosyle's own binary cookie file in the current OS user's home directory. Cookies and freshly obtained form tokens remain in memory, are sent only to `https://mybusiness.mosyle.com`, and are never included in application logs or saved by the client. HTTP redirects are not followed. No root helper, password storage, policy changes, or background renewal is installed.
+The client first attempts native device authentication. It reads the installed Self-Service executable's bundled application constants, the configured account URL from the current user's Mosyle preferences, and the local device identifier. It calls `device_info`, requires a matching Mac with `NO_AUTH` and no password requirement, then exchanges the assigned-user token for a fresh in-memory Self-Service session.
 
-Local confirmation is enforced by this CLI, not by the Mosyle server. Another client or modified binary with access to the same session cookies could submit directly. This feature does not establish a server-enforced authentication requirement.
+Native extraction has no version or binary-hash pin. It tries the known ARM64 string locations after checking the executable format, segment bounds, and string layout. Updates that preserve those locations can work immediately; moved or incompatible constants may require a future extractor update. If extraction, native login, or native session preparation fails, the client tries Mosyle's saved binary cookies once. Both paths validate the device and policy before submission. Cancellation stops the flow, and fallback never occurs after an elevation submission.
+
+Tokens and cookies are sent only to `https://mybusiness.mosyle.com`, remain in memory, and are never included in application logs or saved by the client. HTTP redirects are not followed. No app launch, root helper, password storage, policy changes, or background renewal is installed.
+
+Local confirmation is enforced by this CLI, not by the Mosyle server. Another client or modified binary with access to the same device-authentication inputs or session cookies could submit directly. This feature does not establish a server-enforced authentication requirement.
 
 The request flow validates the returned device identifier and checks the profile before submission. Only the observed `AllowUsers` policy flow is implemented. Mosyle School, approval-required profiles, alternate app layouts, and other session formats are not yet supported. The development account's readable cookie session also opened the management portal; do not assume ordinary employee sessions behave identically until tested.
 
-If the session expires, sign in through Mosyle Self-Service. A missing request form can also mean the app's web interface has changed; the CLI fails instead of guessing new endpoints.
+Supported native authentication obtains a fresh session on each request. If native authentication is unsupported and the saved session expires, sign in through Mosyle Self-Service. A missing request form can also mean the app's web interface has changed; the CLI fails instead of guessing new endpoints.
 
 ## Development
 
@@ -95,6 +99,12 @@ go test ./internal/aod -run '^$' -fuzz FuzzCookies -fuzztime 10s
 scripts/release.sh v0.1.0 ptrap/mosyle-aod-cli
 ```
 
-Tests use synthetic cookies and a local HTTP server; they do not submit live elevation requests. See [release instructions](docs/releasing.md).
+Tests use synthetic authentication responses and cookies with a local HTTP server; they do not submit live elevation requests. An optional installed-app check validates native login and policy without submitting elevation:
+
+```sh
+MOSYLE_AOD_NATIVE_LIVE_TEST=1 go test ./internal/aod -run '^TestNativeInstalledPreparation$' -v -count=1
+```
+
+See [release instructions](docs/releasing.md).
 
 License: MIT.
